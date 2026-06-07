@@ -21,7 +21,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 
-from analyst import run_morning_analysis
+from analyst import run_morning_analysis_sync
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -101,7 +101,8 @@ async def send_briefing(app: Application, chat_id: str = None) -> None:
 
     try:
         # Run the blocking Claude API call in a thread so the ticker keeps updating
-        briefing = await asyncio.get_event_loop().run_in_executor(
+        loop = asyncio.get_event_loop()
+        briefing = await loop.run_in_executor(
             None, run_morning_analysis_sync
         )
 
@@ -142,17 +143,6 @@ async def send_briefing(app: Application, chat_id: str = None) -> None:
                 text=f"❌ Briefing failed: `{e}`",
                 parse_mode="Markdown"
             )
-
-
-def run_morning_analysis_sync() -> str:
-    """Synchronous wrapper for the async analyst (runs in thread executor)."""
-    import asyncio
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop.run_until_complete(run_morning_analysis())
 
 
 def split_message(text: str, limit: int = 4000) -> list[str]:

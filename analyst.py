@@ -1,14 +1,13 @@
 """
 analyst.py
 ----------
-Calls the Anthropic API with web_search enabled.
-Claude runs the full morning-market-analyst skill and returns the briefing as text.
+Fully synchronous — calls Anthropic API with web_search enabled.
+Designed to run inside a thread executor from the async bot.
 """
 
 import os
+import datetime
 import anthropic
-
-ANTHROPIC_KEY = os.environ["ANTHROPIC_API_KEY"]
 
 SYSTEM_PROMPT = """You are a professional morning market analyst for an active options swing trader.
 
@@ -25,7 +24,7 @@ Use the web_search tool to gather:
 - Biggest premarket movers today
 - Key individual stock news for any major catalysts (earnings, upgrades, events)
 
-Search at least 6–8 times across different queries before writing output.
+Search at least 6-8 times across different queries before writing output.
 Never fabricate data — if unavailable, note it explicitly.
 
 ## STEP 2 — Market Overview
@@ -35,63 +34,67 @@ Write a concise header block:
 - Fear & Greed score and label
 - Macro events today
 - Overall bias: BULLISH / BEARISH / NEUTRAL + one-line reason
-- 2–4 sentence narrative
+- 2-4 sentence narrative
 
 ## STEP 3 — 10 Options Picks
-Single-leg calls/puts only. 1–5 DTE swing plays.
+Single-leg calls/puts only. 1-5 DTE swing plays.
 
 For each pick:
-- Score internally on: catalyst clarity, technical alignment, options flow, volume (only include ≥8/12)
-- Format each pick with: thesis, signal confluence (news/technical/flow/volume), and a trade setup table with strike, expiry, entry range, target (+75–100%), stop (–50%), hold period
+- Score internally on: catalyst clarity, technical alignment, options flow, volume (only include 8+/12)
+- Format each pick with: thesis, signal confluence (news/technical/flow/volume), and a trade setup table with strike, expiry, entry range, target (+75-100%), stop (-50%), hold period
 - Add risk flags
 
 ## STEP 4 — Quick Reference Table
-All 10 picks in one summary table with conviction stars (⭐⭐⭐ / ⭐⭐ / ⭐).
+All 10 picks in one summary table with conviction stars.
 
 ## STEP 5 — Risk Reminder
 End with the standard risk disclaimer.
 
 ## Style
 - Direct, Bloomberg-analyst tone
-- Use trader vocab naturally (sweep, flush, squeeze, breakout, flow)
-- Never pad with weak setups — if fewer than 10 pass the filter, say so
+- Use trader vocab naturally
+- Never pad with weak setups
 - Format for Telegram: use *bold* for headers, avoid HTML tags"""
 
 
-async def run_morning_analysis() -> str:
+def run_morning_analysis_sync() -> str:
     """
-    Runs the morning market analyst via Claude claude-sonnet-4-20250514 with web search.
-    Returns the full briefing as a plain string.
+    Pure synchronous function — safe to call from thread executor.
+    Uses Anthropic's streaming API to handle long web_search + generation cycles.
     """
-    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    response = client.messages.create(
+    today = datetime.date.today().strftime("%B %d, %Y")
+
+    # Use streaming to avoid timeout on long runs
+    output_parts = []
+
+    with client.messages.stream(
         model="claude-sonnet-4-20250514",
         max_tokens=8000,
         system=SYSTEM_PROMPT,
-        tools=[
-            {
-                "type": "web_search_20250305",
-                "name": "web_search"
-            }
-        ],
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    "Run the full morning market analysis right now. "
-                    "Search for live data first, then produce the complete briefing "
-                    "with 10 options picks, trade setups, and the summary table. "
-                    "Today's date: " + __import__("datetime").date.today().strftime("%B %d, %Y")
-                )
-            }
-        ]
-    )
-
-    # Extract all text blocks from the response
-    output_parts = []
-    for block in response.content:
-        if block.type == "text":
-            output_parts.append(block.text)
+        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Run the full morning market analysis for {today}. "
+                "Search for live data first, then produce the complete briefing "
+                "with 10 options picks, trade setups, and the summary table."
+            )
+        }]
+    ) as stream:
+        for event in stream:
+            pass  # drain the stream
+        
+        # Get the final message after streaming completes
+        final = stream.get_final_message()
+        for block in final.content:
+            if hasattr(block, "text"):
+                output_parts.append(block.text)
 
     return "\n\n".join(output_parts) if output_parts else "No output generated."
+
+
+# Keep async wrapper for any legacy callers
+async def run_morning_analysis() -> str:
+    return run_morning_analysis_sync()
