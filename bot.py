@@ -100,11 +100,13 @@ async def send_briefing(app: Application, chat_id: str = None) -> None:
     )
 
     try:
+        log.info("send_briefing: starting executor call")
         # Run the blocking Claude API call in a thread so the ticker keeps updating
         loop = asyncio.get_event_loop()
         briefing = await loop.run_in_executor(
             None, run_morning_analysis_sync
         )
+        log.info(f"send_briefing: got briefing ({len(briefing)} chars)")
 
         # Stop the ticker
         stop_event.set()

@@ -60,39 +60,45 @@ End with the standard risk disclaimer.
 def run_morning_analysis_sync() -> str:
     """
     Pure synchronous function — safe to call from thread executor.
-    Uses Anthropic's streaming API to handle long web_search + generation cycles.
     """
+    import logging
+    log = logging.getLogger(__name__)
+
+    log.info("analyst: starting — creating Anthropic client")
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-
     today = datetime.date.today().strftime("%B %d, %Y")
+    log.info(f"analyst: calling API for {today}")
 
-    # Use streaming to avoid timeout on long runs
-    output_parts = []
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=8000,
+            system=SYSTEM_PROMPT,
+            tools=[{"type": "web_search_20250305", "name": "web_search"}],
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Run the full morning market analysis for {today}. "
+                    "Search for live data first, then produce the complete briefing "
+                    "with 10 options picks, trade setups, and the summary table."
+                )
+            }]
+        )
+        log.info(f"analyst: API call complete, stop_reason={response.stop_reason}, blocks={len(response.content)}")
 
-    with client.messages.stream(
-        model="claude-sonnet-4-20250514",
-        max_tokens=8000,
-        system=SYSTEM_PROMPT,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Run the full morning market analysis for {today}. "
-                "Search for live data first, then produce the complete briefing "
-                "with 10 options picks, trade setups, and the summary table."
-            )
-        }]
-    ) as stream:
-        for event in stream:
-            pass  # drain the stream
-        
-        # Get the final message after streaming completes
-        final = stream.get_final_message()
-        for block in final.content:
+        output_parts = []
+        for block in response.content:
             if hasattr(block, "text"):
                 output_parts.append(block.text)
+                log.info(f"analyst: text block length={len(block.text)}")
 
-    return "\n\n".join(output_parts) if output_parts else "No output generated."
+        result = "\n\n".join(output_parts) if output_parts else "No output generated."
+        log.info(f"analyst: returning {len(result)} chars")
+        return result
+
+    except Exception as e:
+        log.error(f"analyst: API error — {type(e).__name__}: {e}")
+        raise
 
 
 # Keep async wrapper for any legacy callers
