@@ -136,15 +136,8 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main() -> None:
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-
-    # Register commands
-    app.add_handler(CommandHandler("analyze", cmd_analyze))
-    app.add_handler(CommandHandler("status",  cmd_status))
-    app.add_handler(CommandHandler("help",    cmd_help))
-
-    # Scheduler — fire weekdays at configured time
+async def post_init(app: Application) -> None:
+    """Start the scheduler after the event loop is running."""
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
     scheduler.add_job(
         send_briefing,
@@ -161,6 +154,20 @@ def main() -> None:
     )
     scheduler.start()
     log.info(f"Scheduler started — briefings at {BRIEF_HOUR:02d}:{BRIEF_MINUTE:02d} {TIMEZONE} (Mon–Fri)")
+
+
+def main() -> None:
+    app = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .post_init(post_init)
+        .build()
+    )
+
+    # Register commands
+    app.add_handler(CommandHandler("analyze", cmd_analyze))
+    app.add_handler(CommandHandler("status",  cmd_status))
+    app.add_handler(CommandHandler("help",    cmd_help))
 
     log.info("Bot polling started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
