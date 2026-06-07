@@ -22,6 +22,8 @@ log = logging.getLogger(__name__)
 def run_telegram_bot():
     """Telegram bot in its own thread + event loop — crash here won't kill uvicorn."""
     try:
+        import time
+        time.sleep(3)  # Wait for old instance to fully stop before polling
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         log.info("Telegram bot starting...")
