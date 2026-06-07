@@ -73,14 +73,14 @@ async def progress_ticker(bot, chat_id: str, status_msg_id: int, stop_event: asy
 
 # ── Core briefing sender ───────────────────────────────────────────────────────
 
-async def send_briefing(app: Application, chat_id: str = None) -> None:
+async def send_briefing(app: Application, chat_id: str = None, scheduled: bool = False) -> None:
     """Generate and send the full market briefing with live progress updates."""
     chat_id = chat_id or CHAT_ID
     tz = pytz.timezone(TIMEZONE)
     now = datetime.now(tz)
 
-    # Skip weekends for scheduled runs (not on-demand)
-    if chat_id == CHAT_ID and now.weekday() >= 5:
+    # Only skip weekends for auto-scheduled runs, never for on-demand /analyze
+    if scheduled and now.weekday() >= 5:
         log.info("Weekend — skipping scheduled briefing.")
         return
 
@@ -170,7 +170,7 @@ async def cmd_analyze(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if str(update.effective_chat.id) != str(CHAT_ID):
         await update.message.reply_text("⛔ Unauthorized.")
         return
-    await send_briefing(ctx.application, chat_id=str(update.effective_chat.id))
+    await send_briefing(ctx.application, chat_id=str(update.effective_chat.id), scheduled=False)
 
 
 async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -211,6 +211,7 @@ async def post_init(app: Application) -> None:
             timezone=TIMEZONE
         ),
         args=[app],
+        kwargs={"scheduled": True},
         id="morning_briefing",
         replace_existing=True
     )
