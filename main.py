@@ -1,8 +1,7 @@
 """
-main.py
--------
-Entrypoint — runs Telegram bot in a background thread,
-uvicorn (FastAPI webhook) in the main thread on Railway's PORT.
+main.py — Railway entrypoint
+uvicorn runs in main thread on PORT=8000
+Telegram bot runs in background thread with isolated event loop
 """
 
 import asyncio
@@ -21,28 +20,33 @@ log = logging.getLogger(__name__)
 
 
 def run_telegram_bot():
-    """Run the Telegram bot in a background thread with its own event loop."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    from bot import main as bot_main
-    log.info("Telegram bot thread starting...")
-    bot_main()
+    """Telegram bot in its own thread + event loop — crash here won't kill uvicorn."""
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        log.info("Telegram bot starting...")
+        from bot import main as bot_main
+        bot_main()
+    except Exception as e:
+        log.error(f"Telegram bot crashed: {e}", exc_info=True)
 
 
 def main():
-    # Start Telegram bot in background thread
-    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
+    # Start bot in background — isolated, won't affect HTTP server
+    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True, name="telegram-bot")
     bot_thread.start()
     log.info("Telegram bot thread started")
 
-    # Railway domain is configured to route to port 8000
+    # uvicorn in main thread — Railway needs this to stay alive on port 8000
+    import uvicorn
     port = int(os.environ.get("PORT", "8000"))
-    log.info(f"Starting webhook server on 0.0.0.0:{port}")
+    log.info(f"Starting uvicorn on 0.0.0.0:{port}")
     uvicorn.run(
         "webhook:app",
         host="0.0.0.0",
         port=port,
-        log_level="warning"
+        log_level="info",
+        access_log=True
     )
 
 

@@ -40,6 +40,11 @@ TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 app = FastAPI(title="TradingView Alert Webhook")
 
+
+@app.on_event("startup")
+async def startup():
+    log.info("FastAPI webhook server started successfully")
+
 # ── In-memory position tracker ─────────────────────────────────────────────────
 # { "NQ1!": {"action": "BUY", "price": 18245.50, "qty": 1, "time": datetime} }
 open_positions: dict = {}
