@@ -23,13 +23,14 @@ log = logging.getLogger(__name__)
 
 def run_webhook_server():
     """Run FastAPI/uvicorn in a background thread."""
-    port = int(os.getenv("PORT", "8000"))
-    log.info(f"Starting webhook server on port {port}")
+    # Railway injects PORT dynamically — must use it or Railway won't route traffic
+    port = int(os.environ.get("PORT", "8000"))
+    log.info(f"Starting webhook server on 0.0.0.0:{port}")
     uvicorn.run(
         "webhook:app",
         host="0.0.0.0",
         port=port,
-        log_level="info"
+        log_level="warning"   # reduce noise in Railway logs
     )
 
 
