@@ -35,8 +35,7 @@ def main():
     bot_thread.start()
     log.info("Telegram bot thread started")
 
-    # Run uvicorn in main thread — Railway routes HTTP traffic here
-    import uvicorn
+    # Railway domain is configured to route to port 8000
     port = int(os.environ.get("PORT", "8000"))
     log.info(f"Starting webhook server on 0.0.0.0:{port}")
     uvicorn.run(
