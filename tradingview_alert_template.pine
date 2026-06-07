@@ -1,0 +1,88 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// TradingView Alert JSON Templates
+// Paste these into the "Message" field when creating an alert in TradingView
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// WEBHOOK URL (set this in TradingView alert → Notifications → Webhook URL):
+//   https://YOUR-RAILWAY-URL.railway.app/alert
+//
+// ── ENTRY LONG (BUY) ─────────────────────────────────────────────────────────
+// {
+//   "symbol":    "{{ticker}}",
+//   "action":    "BUY",
+//   "price":     {{close}},
+//   "qty":       1,
+//   "sl":        {{plot("Stop Loss")}},
+//   "tp":        {{plot("Take Profit")}},
+//   "timeframe": "{{interval}}",
+//   "comment":   "{{strategy.order.comment}}",
+//   "secret":    "YOUR_WEBHOOK_SECRET"
+// }
+//
+// ── ENTRY SHORT (SELL) ───────────────────────────────────────────────────────
+// {
+//   "symbol":    "{{ticker}}",
+//   "action":    "SELL",
+//   "price":     {{close}},
+//   "qty":       1,
+//   "sl":        {{plot("Stop Loss")}},
+//   "tp":        {{plot("Take Profit")}},
+//   "timeframe": "{{interval}}",
+//   "comment":   "{{strategy.order.comment}}",
+//   "secret":    "YOUR_WEBHOOK_SECRET"
+// }
+//
+// ── EXIT LONG ────────────────────────────────────────────────────────────────
+// {
+//   "symbol":    "{{ticker}}",
+//   "action":    "EXIT_LONG",
+//   "price":     {{close}},
+//   "qty":       1,
+//   "timeframe": "{{interval}}",
+//   "comment":   "{{strategy.order.comment}}",
+//   "secret":    "YOUR_WEBHOOK_SECRET"
+// }
+//
+// ── EXIT SHORT ───────────────────────────────────────────────────────────────
+// {
+//   "symbol":    "{{ticker}}",
+//   "action":    "EXIT_SHORT",
+//   "price":     {{close}},
+//   "qty":       1,
+//   "timeframe": "{{interval}}",
+//   "comment":   "{{strategy.order.comment}}",
+//   "secret":    "YOUR_WEBHOOK_SECRET"
+// }
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// PINE SCRIPT EXAMPLE — fires alerts from a strategy
+// ─────────────────────────────────────────────────────────────────────────────
+
+//@version=5
+strategy("Futures Alert Bot", overlay=true)
+
+// Your strategy logic here — example: EMA crossover
+fastEMA = ta.ema(close, 9)
+slowEMA = ta.ema(close, 21)
+
+longCondition  = ta.crossover(fastEMA, slowEMA)
+shortCondition = ta.crossunder(fastEMA, slowEMA)
+
+// ATR-based SL/TP
+atr = ta.atr(14)
+longSL  = close - atr * 1.5
+longTP  = close + atr * 3.0
+shortSL = close + atr * 1.5
+shortTP = close - atr * 3.0
+
+// Plot for use in alert template via {{plot(...)}}
+plot(longCondition  ? longSL  : na, "Stop Loss",   color=color.red)
+plot(longCondition  ? longTP  : na, "Take Profit", color=color.green)
+
+if longCondition
+    strategy.entry("Long", strategy.long)
+    alert('{"symbol":"' + syminfo.ticker + '","action":"BUY","price":' + str.tostring(close) + ',"qty":1,"sl":' + str.tostring(longSL) + ',"tp":' + str.tostring(longTP) + ',"timeframe":"' + timeframe.period + '","comment":"EMA Cross Long","secret":"YOUR_WEBHOOK_SECRET"}', alert.freq_once_per_bar)
+
+if shortCondition
+    strategy.entry("Short", strategy.short)
+    alert('{"symbol":"' + syminfo.ticker + '","action":"SELL","price":' + str.tostring(close) + ',"qty":1,"sl":' + str.tostring(shortSL) + ',"tp":' + str.tostring(shortTP) + ',"timeframe":"' + timeframe.period + '","comment":"EMA Cross Short","secret":"YOUR_WEBHOOK_SECRET"}', alert.freq_once_per_bar)
