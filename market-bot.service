@@ -1,0 +1,17 @@
+[Unit]
+Description=Morning Market Analyst Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/market-bot
+EnvironmentFile=/home/ubuntu/market-bot/.env
+ExecStart=/home/ubuntu/market-bot/venv/bin/python bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
