@@ -16,7 +16,7 @@ import anthropic
 
 log = logging.getLogger(__name__)
 
-EXPLABS_BASE_URL = "https://api.experientiallabs.ai/v1"
+EXPLABS_BASE_URL = "https://api.experientiallabs.ai"
 MODEL_ID         = "claude-fable-5.1"
 
 SYSTEM_PROMPT = """You are a professional morning market analyst for an active options swing trader.
