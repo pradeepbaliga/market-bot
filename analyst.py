@@ -1,13 +1,23 @@
 """
 analyst.py
 ----------
-Fully synchronous — calls Anthropic API with web_search enabled.
-Designed to run inside a thread executor from the async bot.
+Fully synchronous — calls the Experiential Labs API (Anthropic-compatible)
+with web_search enabled. Designed to run inside a thread executor from the async bot.
+
+Base URL : https://api.experientiallabs.ai/v1
+Model    : claude-fable-5.1
+Auth     : EXPLABS_API_KEY environment variable
 """
 
 import os
 import datetime
+import logging
 import anthropic
+
+log = logging.getLogger(__name__)
+
+EXPLABS_BASE_URL = "https://api.experientiallabs.ai/v1"
+MODEL_ID         = "claude-fable-5.1"
 
 SYSTEM_PROMPT = """You are a professional morning market analyst for an active options swing trader.
 
@@ -57,21 +67,36 @@ End with the standard risk disclaimer.
 - Format for Telegram: use *bold* for headers, avoid HTML tags"""
 
 
+def get_client() -> anthropic.Anthropic:
+    """
+    Build and return the Anthropic-compatible client pointed at Experiential Labs.
+    Raises a clear error if EXPLABS_API_KEY is not set.
+    """
+    api_key = os.environ.get("EXPLABS_API_KEY")
+    if not api_key:
+        raise EnvironmentError(
+            "EXPLABS_API_KEY is not set. "
+            "Please create one under Settings → API Keys and add it as a Railway environment variable."
+        )
+    return anthropic.Anthropic(
+        api_key=api_key,
+        base_url=EXPLABS_BASE_URL,
+    )
+
+
 def run_morning_analysis_sync() -> str:
     """
     Pure synchronous function — safe to call from thread executor.
     """
-    import logging
-    log = logging.getLogger(__name__)
+    log.info("analyst: creating Experiential Labs client")
+    client = get_client()
 
-    log.info("analyst: starting — creating Anthropic client")
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     today = datetime.date.today().strftime("%B %d, %Y")
-    log.info(f"analyst: calling API for {today}")
+    log.info(f"analyst: calling {MODEL_ID} for {today}")
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-5",
+            model=MODEL_ID,
             max_tokens=8000,
             system=SYSTEM_PROMPT,
             tools=[{"type": "web_search_20250305", "name": "web_search"}],
@@ -84,23 +109,24 @@ def run_morning_analysis_sync() -> str:
                 )
             }]
         )
-        log.info(f"analyst: API call complete, stop_reason={response.stop_reason}, blocks={len(response.content)}")
+        log.info(f"analyst: done — stop_reason={response.stop_reason}, blocks={len(response.content)}")
 
         output_parts = []
         for block in response.content:
             if hasattr(block, "text"):
                 output_parts.append(block.text)
-                log.info(f"analyst: text block length={len(block.text)}")
+                log.info(f"analyst: text block {len(block.text)} chars")
 
         result = "\n\n".join(output_parts) if output_parts else "No output generated."
-        log.info(f"analyst: returning {len(result)} chars")
+        log.info(f"analyst: returning {len(result)} chars total")
         return result
 
+    except EnvironmentError:
+        raise
     except Exception as e:
         log.error(f"analyst: API error — {type(e).__name__}: {e}")
         raise
 
 
-# Keep async wrapper for any legacy callers
 async def run_morning_analysis() -> str:
     return run_morning_analysis_sync()
